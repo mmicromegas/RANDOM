@@ -94,11 +94,18 @@ print(tst1)
 print(tst2)
 print("---")
 
-sola =prob_1.gauss_elimin(tst1,tst2)
+#sola =prob_1.gauss_elimin(tst1,tst2)
+
+print(tst1)
+print(tst2)
+print("---")
+
 solb = np.linalg.solve(tst1,tst2)
 
-print sola
+
+#print sola
 print solb
+#print np.linalg.solve(tst1,tst2)
 
 #print sola[0],sola[1]
 #print solb[0],solb[1]
