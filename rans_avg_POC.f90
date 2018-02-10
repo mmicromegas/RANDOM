@@ -2,10 +2,14 @@
 
 program ransX_avg
 
+  implicit none
+
   INTEGER, PARAMETER :: qx = 10, qy = 10, qz = 10
   INTEGER, PARAMETER :: nnuc = 25
-  INTEGER, PARAMETER :: nrans = 5+nnuc
-  INTEGER, PARAMETER :: ix = 16  
+  
+  ! the 2* is due to xdotn
+  INTEGER, PARAMETER :: nrans = 6+2*nnuc+8*nnuc
+  INTEGER, PARAMETER :: ix = 16
   
   integer*4 i, j, k, n, ii, jj, kk
   integer*4 ifield, rans_nnuc
@@ -26,7 +30,7 @@ program ransX_avg
   
   real*8 havg(4,nrans,qx)
 
-  real*8 time, rans_tavg, rans_end,  dt
+  real*8 time, rans_tavg, rans_tend,  rans_tstart, rans_end, dt
   
   character(len=4)  :: xidchar    
  
@@ -46,7 +50,7 @@ program ransX_avg
   
   ! ransX
 
-  integer*4 idd,iux,iuy,iuz,ienuc  
+  integer*4 idd,iux,iuy,iuz,ienuc, iei, ipp  
   
   real*8 eps(qx,qy,qz)
   
@@ -88,10 +92,15 @@ program ransX_avg
   real*8 xdotn(qx,nnuc), xd(qx,qy,qz)
   real*8 fh_fxndotx(4,qx,nnuc), fh_rxx(4,qx)
 
-  
 ! dummy xx
   real*8 xx(nnuc)
+  real*8 dx
   
+  integer*4 imode
+  
+  real*8 eh_uxf_f(qx)
+!  real*8 eh_xnf_f(qx,nnuc)
+  integer*4 ifieldmark 
   
   ! imode = 0 : initialize
   ! imode = 1 : update
@@ -116,13 +125,28 @@ program ransX_avg
         do i=1,qx
 		   fh_feix(1,i) = fh_feix(2,i)
            fh_feix(2,i) = 0.d0
+		   fh_rxx(1,i) = fh_rxx(2,i)
+		   fh_rxx(2,i) = 0.d0
            do n=1,rans_nnuc		
               fh_fxnx(1,i,n) = fh_fxnx(2,i,n)
 			  fh_fxnx(2,i,n)= 0.
+              fh_fxnxx(1,i,n) = fh_fxnxx(2,i,n)
+			  fh_fxnxx(2,i,n)= 0.			  
+			  fh_sxn(1,i,n) = fh_sxn(2,i,n)
+			  fh_sxn(2,i,n)= 0.
+			  fh_fsxnx(1,i,n) = fh_fsxnx(2,i,n)
+			  fh_fsxnx(2,i,n)= 0.
+			  fh_sxndot(1,i,n) = fh_sxndot(2,i,n)
+			  fh_sxndot(2,i,n)= 0.
+			  fh_fxndotx(1,i,n) = fh_fxndotx(2,i,n)
+			  fh_fxndotx(2,i,n)= 0.
+			  eh_xnf_f(1,i,n) = eh_xnf_f(2,i,n)
+		      eh_xnf_f(2,i,n)= 0.
+              eh_xnfgradpf(1,i,n) = eh_xnfgradpf(2,i,n)
+              eh_xnfgradpf(2,i,n)= 0.	  
           enddo
 		enddo
   endif   
-   
    
 ! populate test arrays
   
@@ -132,14 +156,14 @@ program ransX_avg
   do k=1,qz
      do j=1,qy  
         do i=1,qx
-		  density(i,j,k) = RAND(0) 
-		  velx(i,j,k) = RAND(0) 
-		  vely(i,j,k) = RAND(0) 
-		  velz(i,j,k) = RAND(0) 
-		  energy(i,j,k) = RAND(0) 		  
+		  density(i,j,k) = i*2. 
+		  velx(i,j,k) = i*3. 
+		  vely(i,j,k) = i*4. 
+		  velz(i,j,k) = i*5. 
+		  energy(i,j,k) = RAND(0)
 		  eps(i,j,k) = RAND(0)
 		  temp(i,j,k) = RAND(0)
-		  press(i,j,k) = RAND(0)
+		  press(i,j,k) = RAND(0) 		  
 		enddo
 	 enddo
   enddo
@@ -149,7 +173,7 @@ program ransX_avg
 	do k=1,qz
       do j=1,qy  
         do i=1,qx
-           xnuc(i,j,k,n) = RAND(0)
+           xnuc(i,j,k,n) = i*6.
         enddo
       enddo
     enddo
@@ -172,28 +196,36 @@ program ransX_avg
        fsterad(k,j) = 1.
      enddo
   enddo	 
-
+  
   do n=1,nnuc
-   xx(n) = 1.
+   xx(n) = RAND(0)
   enddo  
   
   ! dtx = 1 second   
   do k=1,qz
     do j=1,qy  
-      do i=1,qx
-        !  call burnzone(tt(i),dd(i),xx,1.)
-        do n=1,rans_nnuc
-		   xnew(i,j,k,n) = xx(n)
+
+        do i=1,qx
+           dd(i)   = density(i,j,k)
+           tt(i)   = temp(i,j,k)		   
         enddo	
-        xdot(i,j,k,n) = xnew(i,j,k,n) - xnuc(i,j,k,n)
-      enddo	
+	
+        do i=1,qx
+           do n=1,rans_nnuc
+              xn(i,n) = xnuc(i,j,k,n)
+           enddo
+        enddo
+		
+        do i=1,qx
+		   xx(:) = xn(i,:)
+        !  call burnzone(tt(i),dd(i),xx,1.)
+		   xdot(i,j,k,:) = xx - xnuc(i,j,k,:) 
+		enddo   
+		
     enddo
-  enddo
-  
+  enddo  
   
 ! calculate horizonatal averages   
-
-  dtx = 1.
   
   do k=1,qz
      do j=1,qy  
@@ -205,9 +237,9 @@ program ransX_avg
            ux(i)   = velx(i,j,k)
            uy(i)   = vely(i,j,k)
            uz(i)   = velz(i,j,k)
-           ei(i)   = eint(i,j,k)		   
-           tt(i)   = temp(i,j,k)
-           pp(i)   = press(i,j,k)		   
+           ei(i)   = eint(i,j,k)
+           pp(i)   = press(i,j,k)		
+           tt(i)   = temp(i,j,k)		   
 		enddo
     
         do i=1,qx
@@ -215,12 +247,6 @@ program ransX_avg
               xn(i,n) = xnuc(i,j,k,n)
            enddo
         enddo
-		
-        do i=1,qx
-		   do n=1,rans_nnuc
-              xdotn(i,n) = xdot(i,j,k,n)
-           enddo
-        enddo	
 	
         ! update current horizontally averaged fields in havg(2,:,:)
         
@@ -271,7 +297,7 @@ program ransX_avg
         if(imode.eq.0) ransname(ifield) = 'pp'
         do i=1,qx
            havg(2,ifield,i) = havg(2,ifield,i) + pp(i)*fsteradjk ! eh_pp
-        enddo	
+        enddo		
 	
         do n=1,rans_nnuc   
 !           if(imode.eq.0) then ! construct varnames
@@ -283,7 +309,7 @@ program ransX_avg
               xvarname(4) = 'ddx'//xidchar//'sq' ! for favrian sigma
               xvarname(5) = 'x'//xidchar//'ux'
               xvarname(6) = 'ddx'//xidchar//'ux'
-			  xvarname(7) = 'x' // xidchar //'dot'  
+			  xvarname(7) = 'x' // xidchar //'dot' 			  
 !           endif
 
            ! xn 
@@ -295,21 +321,27 @@ program ransX_avg
 !		   endif 
            do i=1,qx                                      
               havg(2,ifield,i) =  havg(2,ifield,i) + &    
-                   xn(i,n)*fsteradjk              				   
-           enddo
- 
-           ! ddxdot
+                   xn(i,n)*fsteradjk                      
+           enddo	
+		   
            ifield = ifield+1                  
 		   ransname(ifield) = xvarname(7)		   
            do i=1,qx                                      
               havg(2,ifield,i) =  havg(2,ifield,i) + &    
                    dd(i)*xdotn(i,n)*fsteradjk                      
-           enddo		  
+           enddo			   
+		 		   
         enddo		   
      enddo
   enddo
-  
-  ! ransX
+    	
+  ifieldmark = ifield		
+		
+!  write(*,*) havg(2,iransname(25),:)
+		
+  ! get Reynolds fluctuations 
+
+   ! ransX
 
   do i=1,qx
      ! get Reynolds fluctuations
@@ -323,7 +355,7 @@ program ransX_avg
 	 ! get Favre fluctuations
 	 uxf_f(i,:,:) =  uxf_r(i,:,:) - uxf_c(i)
   enddo	
-
+  
   ! get grad P'
   
   dx = 1. 
@@ -340,9 +372,12 @@ program ransX_avg
 		
 	 enddo
   enddo  
-  
+
+
   do i=1,qx
+     ifield = ifieldmark  ! 56
      do n=1,rans_nnuc
+
 	 !  if(imode.eq.0) then ! construct varnames
           9902 format(i0.4)
           write(xidchar,9902) n
@@ -356,19 +391,20 @@ program ransX_avg
 		  xvarname(15) = 'eh_x' // xidchar //'fgradpf'
 		  xvarname(16) = 'fh_rxx' // xidchar		  
      !  endif
-	 
-	 
+
         ! get Reynolds composition fluctuations	 
 		xnf_r(i,:,:) =  xnuc(i,:,:,n) - havg(2,iransname(n),i)
 		! get Favre corrections
 		xnf_c(i,n)   = (sum(density(i,:,:)*xnf_r(i,:,:)*fsterad(:,:)))/havg(2,iransname(n),i) 
         ! get Favre composition fluctuations		
-		xnf_f(i,:,:) = xnf_r(i,:,:) - xnf_c(i,n)
+		xnf_f(i,:,:) = xnf_r(i,:,:) - xnf_c(i,n)	 
 		! get nuclear composition rate of change
 		xd(i,:,:) = xdot(i,:,:,n)
 
+
 	    ! get composition flux
-        ifield = ifield+1		
+        ifield = ifield+1	
+        ! fh_fxnx (57, 81, etc.) 		
 		ransname(ifield) = xvarname(8)	
 		fh_fxnx(2,i,n)  = sum(xnf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
 
@@ -410,12 +446,21 @@ program ransX_avg
      ! get Reynolds stress (rr)
 	 ifield = ifield+1		
 	 ransname(ifield) = xvarname(16)		  
-     fh_rxx(2,i) = sum(uxf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
-  enddo 
+     fh_rxx(2,i) = sum(uxf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))		
+  enddo    
+ 
+  write(*,*) ifield
+ 
+!  write(*,*) xnf_f(5,:,:)  
   
-
-
-  write(*,*) fh_sxn(2,1,:)
+!  write(*,*) xnf_r(:,:,1)
+!  write(*,*) eh_xnf_f(:,:)
+  
+!  write(*,*) uxf_f(:,:,1) 
+!  write(*,*) ddf_r(:,:,:)	
+!  write(*,*) fh_fxnx(2,:,:)
+  write(*,*) fh_sxn(2,1,:) 
+ 
  
   ! update RANS running average: fh_fxxx(3,:)
   
@@ -426,21 +471,41 @@ program ransX_avg
   
   if(imode.eq.1) then 
      rans_tavg = rans_tavg + dt
-!     rans_tend = time
+     rans_tend = time
      do i=1,qx 
-!         fh_feix(3,i) = fh_feix(3,i) + &
-!             (fh_feix(2,i) + fh_feix(1,n))*0.5d0*dt
+         fh_rxx(3,i) = fh_rxx(3,i) + &
+             (fh_rxx(2,i) + fh_rxx(1,n))*0.5d0*dt
 		do n=1,rans_nnuc
-!		  write(*,*) i,n
           fh_fxnx(3,i,n) = fh_fxnx(3,i,n) + &
              (fh_fxnx(2,i,n) + fh_fxnx(1,i,n))*0.5d0*dt
+		  fh_fxnxx(3,i,n) = fh_fxnxx(3,i,n) + &
+             (fh_fxnxx(2,i,n) + fh_fxnxx(1,i,n))*0.5d0*dt
+          fh_sxn(3,i,n) = fh_sxn(3,i,n) + &
+             (fh_sxn(2,i,n) + fh_sxn(1,i,n))*0.5d0*dt
+          fh_fsxnx(3,i,n) = fh_fsxnx(3,i,n) + &
+             (fh_fsxnx(2,i,n) + fh_fsxnx(1,i,n))*0.5d0*dt
+          fh_sxndot(3,i,n) = fh_sxndot(3,i,n) + &  
+             (fh_sxndot(2,i,n) + fh_sxndot(1,i,n))*0.5d0*dt
+          fh_fxndotx(3,i,n) = fh_fxndotx(3,i,n) + &
+             (fh_fxndotx(2,i,n) + fh_fxndotx(1,i,n))*0.5d0*dt  
+          eh_xnf_f(3,i,n) = eh_xnf_f(3,i,n) + &
+              (eh_xnf_f(2,i,n) + eh_xnf_f(1,i,n))*0.5d0*dt
+          eh_xnfgradpf(3,i,n) = eh_xnfgradpf(3,i,n) + & 		  
+              (eh_xnfgradpf(2,i,n) + eh_xnfgradpf(1,i,n))*0.5d0*dt
         enddo		
      enddo	 
   else if(imode.eq.0) then
      do i=1,qx
-!        fh_feix(4,i) = fh_feix(2,i) !store first instance in this averaging interval
+        fh_feix(4,i) = fh_feix(2,i) !store first instance in this averaging interval
 		do n=1,rans_nnuc
 		  fh_fxnx(4,i,n) = fh_fxnx(2,i,n)
+		  fh_fxnxx(4,i,n) = fh_fxnxx(2,i,n)
+		  fh_sxn(4,i,n) = fh_sxn(2,i,n)
+		  fh_fsxnx(4,i,n) = fh_fsxnx(2,i,n)
+		  fh_sxndot(4,i,n) = fh_sxndot(2,i,n)
+		  fh_fxndotx(4,i,n) = fh_fxndotx(2,i,n)
+		  eh_xnf_f(4,i,n) = eh_xnf_f(2,i,n)
+		  eh_xnfgradpf(4,i,n) = eh_xnfgradpf(2,i,n)
 		enddo
      enddo
   endif 
