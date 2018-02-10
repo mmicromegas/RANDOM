@@ -8,7 +8,7 @@ program ransX_avg
   INTEGER, PARAMETER :: nnuc = 25
   
   ! the 2* is due to xdotn
-  INTEGER, PARAMETER :: nrans = 6+2*nnuc+8*nnuc
+  INTEGER, PARAMETER :: nrans = 6+2*nnuc+8*nnuc+1
   INTEGER, PARAMETER :: ix = 16
   
   integer*4 i, j, k, n, ii, jj, kk
