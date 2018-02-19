@@ -7,18 +7,19 @@ program ransX_avg
   INTEGER, PARAMETER :: qx = 10, qy = 10, qz = 10
   INTEGER, PARAMETER :: nnuc = 25
   
-  ! the 2* is due to xdotn
-  INTEGER, PARAMETER :: nrans = 6+2*nnuc+8*nnuc+1
-  INTEGER, PARAMETER :: ix = 16
+  ! the 2* is due to xdotn, the 8 is due to terms in comp equations (transport, flux, variance)
+  ! the +1 is due to rxx, the +1 is due to fhhx, the +1 je ddcp,+1 je ttrms, +1 ddrms, +1 sddx, +1 rdfdddivux, +1 fddx, +1 fsddx
+  INTEGER, PARAMETER :: nrans = 8+2*nnuc+8*nnuc+1+1+1+1+1+1+1+1+1
+  INTEGER, PARAMETER :: ix = 15
   
   integer*4 i, j, k, n, ii, jj, kk
   integer*4 ifield, rans_nnuc
   !
   real*8 velx(qx,qy,qz), vely(qx,qy,qz),velz(qx,qy,qz)
-  real*8 density(qx,qy,qz),eint(qx,qy,qz),temp(qx,qy,qz)
-  real*8 energy(qx,qy,qz),ekin(qx,qy,qz), press(qx,qy,qz)
+  real*8 density(qx,qy,qz),eint(qx,qy,qz),temp(qx,qy,qz),cpdat(qx,qy,qz)
+  real*8 energy(qx,qy,qz),ekin(qx,qy,qz),press(qx,qy,qz),enth(qx,qy,qz) 
 
-  real*8 ei(qx), dd(qx), ux(qx), uy(qx), uz(qx), xn(qx,nnuc), tt(qx), pp(qx)
+  real*8 ei(qx),dd(qx),ux(qx),uy(qx),uz(qx),xn(qx,nnuc),tt(qx),pp(qx),hh(qx)
 
   real*8 fsterad(qy,qz)
   
@@ -30,7 +31,7 @@ program ransX_avg
   
   real*8 havg(4,nrans,qx)
 
-  real*8 time, rans_tavg, rans_tend,  rans_tstart, rans_end, dt
+  real*8 time,rans_tavg,rans_tend,rans_tstart,rans_end, dt
   
   character(len=4)  :: xidchar    
  
@@ -43,63 +44,86 @@ program ransX_avg
 !  integer*4, allocatable :: iransname(:)
 !  allocate (iransname(nnuc))
  
-  character(len=24) ransname(nrans)
-  character(len=24) xvarname(ix)
-  integer*4 iransname(nnuc)  
   
-  
-  ! ransX
+! dummy xx
+  real*8 xx(nnuc)
+  real*8 dx  
 
-  integer*4 idd,iux,iuy,iuz,ienuc, iei, ipp  
-  
   real*8 eps(qx,qy,qz)
   
   real*8 enuc(qx)
   
-  real*8 pf(qx)
+!  real*8 eh_uxf_f(qx)
+!  real*8 eh_xnf_f(qx,nnuc)  
+  
+  ! ransX
+
+  character(len=24) ransname(nrans)
+  character(len=24) xvarname(ix)
+  
+  ! Index store for composition variables
+  
+  integer*4 iransname(nnuc)   
+  
+  ! Indices for specific thermodyanmic variables 
+  
+  integer*4 idd,iux,iuy,iuz,ienuc,iei,ipp,ihh,itt  
   
   ! Reynolds fluctuations 
   
-  real*8 ddf_r(qx,qy,qz), eif_r(qx,qy,qz)
+  real*8 ddf_r(qx,qy,qz),eif_r(qx,qy,qz),enf_r(qx,qy,qz)
   real*8 uxf_r(qx,qy,qz),uyf_r(qx,qy,qz),uzf_r(qx,qy,qz)
-  real*8 xnf_r(qx,qy,qz), ppf_r(qx,qy,qz)
+  real*8 xnf_r(qx,qy,qz),ppf_r(qx,qy,qz),hhf_r(qx,qy,qz)
 
   ! Favre corrections
   
-  real*8 uxf_c(qx),eh_uyf_f(qx),eh_uzf_f(qx),eh_eif_f(qx)  
+  real*8 uxf_c(qx),eh_uyf_f(qx),eh_uzf_f(qx),eh_eif_f(qx)
+  real*8 hhf_c(qx),ttf_c(qx),ddf_c(qx)  
   real*8 xnf_c(qx,nnuc)
   
   ! Favre fluctuations 
   
-  real*8 ddf_f(qx,qy,qz), eif_f(qx,qy,qz)
+  real*8 ddf_f(qx,qy,qz),eif_f(qx,qy,qz),hhf_f(qx,qy,qz)
   real*8 uxf_f(qx,qy,qz),uyf_f(qx,qy,qz),uzf_f(qx,qy,qz)  
   real*8 xnf_f(qx,qy,qz)
   
+  ! Pressure fluctuations for grad P' 
+  
+  real*8 pf(qx)  
+  
   ! Fluxes
-  real*8 fh_feix(4,qx), fh_fxnx(4,qx,nnuc), fh_fxnxx(4,qx,nnuc), fh_xndotx(4,qx,nnuc)
+  real*8 fh_feix(4,qx), fxnx(4,qx,nnuc), fxnxx(4,qx,nnuc), fh_xndotx(4,qx,nnuc)
 
   ! Variances  
   
-  real*8 fh_sxn(4,qx,nnuc), fh_fsxnx(4,qx,nnuc), fh_sxndot(4,qx,nnuc) 
+  real*8 sxn(4,qx,nnuc), fsxnx(4,qx,nnuc), rfxndot(4,qx,nnuc) 
   
-  !
+  ! Pressure-variance coupling terms
+  
   real*8 gradxppf_r(qx,qy,qz)
-  real*8 eh_xnfgradpf(4,qx,nnuc), eh_xnf_f(4,qx,nnuc)
+  real*8 rxnfgradpf(4,qx,nnuc) 
   
-  ! Xdot
+  ! Reynolds average of X''
+  
+  real*8 rxnf_f(4,qx,nnuc)
+  
+  ! Xdot terms
   
   real*8 xdot(qx,qy,qz,nnuc), xnew(qx,qy,qz,nnuc) 
   real*8 xdotn(qx,nnuc), xd(qx,qy,qz)
-  real*8 fh_fxndotx(4,qx,nnuc), fh_rxx(4,qx)
-
-! dummy xx
-  real*8 xx(nnuc)
-  real*8 dx
+  real*8 fxndotx(4,qx,nnuc)
+  
+  ! Density flux equation
+  
+  real*8 sddx(4,qx),rdfdddivux(4,qx),fddx(4,qx),fsddx(4,qx)
+  real*8 divelx(qx,qy,qz)  
+  
+  ! Other usefull fields
+  
+  real*8 rxx(4,qx), fhhx(4,qx),ddcp(4,qx),ttrms(4,qx),ddrms(4,qx)  
   
   integer*4 imode
   
-  real*8 eh_uxf_f(qx)
-!  real*8 eh_xnf_f(qx,nnuc)
   integer*4 ifieldmark 
   
   ! imode = 0 : initialize
@@ -125,25 +149,41 @@ program ransX_avg
         do i=1,qx
 		   fh_feix(1,i) = fh_feix(2,i)
            fh_feix(2,i) = 0.d0
-		   fh_rxx(1,i) = fh_rxx(2,i)
-		   fh_rxx(2,i) = 0.d0
+		   rxx(1,i) = rxx(2,i)
+		   rxx(2,i) = 0.d0
+		   fhhx(1,i) = fhhx(2,i)
+		   fhhx(2,i) = 0.d0
+		   ddcp(1,i) = ddcp(2,i)
+		   ddcp(2,i) = 0.d0
+		   ttrms(1,i) = ttrms(2,i)
+		   ttrms(2,i) = 0.d0
+		   ddrms(1,i) = ddrms(2,i)
+		   ddrms(2,i) = 0.d0	
+		   sddx(1,i) = sddx(2,i)
+		   sddx(2,i) = 0.d0			   
+		   fddx(1,i) = fddx(2,i)
+		   fddx(2,i) = 0.d0	   
+		   rdfdddivux(1,i) = rdfdddivux(2,i)
+		   rdfdddivux(2,i) = 0.d0		
+		   fsddx(1,i) = fsddx(2,i)
+		   fsddx(2,i) = 0.d0			   
            do n=1,rans_nnuc		
-              fh_fxnx(1,i,n) = fh_fxnx(2,i,n)
-			  fh_fxnx(2,i,n)= 0.
-              fh_fxnxx(1,i,n) = fh_fxnxx(2,i,n)
-			  fh_fxnxx(2,i,n)= 0.			  
-			  fh_sxn(1,i,n) = fh_sxn(2,i,n)
-			  fh_sxn(2,i,n)= 0.
-			  fh_fsxnx(1,i,n) = fh_fsxnx(2,i,n)
-			  fh_fsxnx(2,i,n)= 0.
-			  fh_sxndot(1,i,n) = fh_sxndot(2,i,n)
-			  fh_sxndot(2,i,n)= 0.
-			  fh_fxndotx(1,i,n) = fh_fxndotx(2,i,n)
-			  fh_fxndotx(2,i,n)= 0.
-			  eh_xnf_f(1,i,n) = eh_xnf_f(2,i,n)
-		      eh_xnf_f(2,i,n)= 0.
-              eh_xnfgradpf(1,i,n) = eh_xnfgradpf(2,i,n)
-              eh_xnfgradpf(2,i,n)= 0.	  
+              fxnx(1,i,n) = fxnx(2,i,n)
+			  fxnx(2,i,n)= 0.
+              fxnxx(1,i,n) = fxnxx(2,i,n)
+			  fxnxx(2,i,n)= 0.			  
+			  sxn(1,i,n) = sxn(2,i,n)
+			  sxn(2,i,n)= 0.
+			  fsxnx(1,i,n) = fsxnx(2,i,n)
+			  fsxnx(2,i,n)= 0.
+			  rfxndot(1,i,n) = rfxndot(2,i,n)
+			  rfxndot(2,i,n)= 0.
+			  fxndotx(1,i,n) = fxndotx(2,i,n)
+			  fxndotx(2,i,n)= 0.
+			  rxnf_f(1,i,n) = rxnf_f(2,i,n)
+		      rxnf_f(2,i,n)= 0.
+              rxnfgradpf(1,i,n) = rxnfgradpf(2,i,n)
+              rxnfgradpf(2,i,n)= 0.	  
           enddo
 		enddo
   endif   
@@ -156,14 +196,16 @@ program ransX_avg
   do k=1,qz
      do j=1,qy  
         do i=1,qx
-		  density(i,j,k) = i*2. 
-		  velx(i,j,k) = i*3. 
+!		  density(i,j,k) = i*2. 
+          density(i,j,k) = RAND(0)
+		  velx(i,j,k) = RAND(0) 
 		  vely(i,j,k) = i*4. 
 		  velz(i,j,k) = i*5. 
 		  energy(i,j,k) = RAND(0)
-		  eps(i,j,k) = RAND(0)
-		  temp(i,j,k) = RAND(0)
-		  press(i,j,k) = RAND(0) 		  
+		  temp(i,j,k) = i*7.
+		  press(i,j,k) = i*8.
+          cpdat(i,j,k) = RAND(0)
+          divelx(i,j,k) = RAND(0)		  
 		enddo
 	 enddo
   enddo
@@ -173,13 +215,13 @@ program ransX_avg
 	do k=1,qz
       do j=1,qy  
         do i=1,qx
-           xnuc(i,j,k,n) = i*6.
+           xnuc(i,j,k,n) = RAND(0)
         enddo
       enddo
     enddo
   enddo	
     
-! calculate ek and ei  
+! calculate ek and ei and enthalpy (specific)
   
   do k=1,qz
      do j=1,qy
@@ -187,6 +229,7 @@ program ransX_avg
            ekin(i,j,k) = (velx(i,j,k)*velx(i,j,k) + & 
                 vely(i,j,k)*vely(i,j,k) + velz(i,j,k)*velz(i,j,k))*0.5d0
            eint(i,j,k) = energy(i,j,k) - ekin(i,j,k)
+		   enth(i,j,k) = eint(i,j,k) + press(i,j,k)/density(i,j,k)
         enddo
      enddo
   enddo  
@@ -239,7 +282,8 @@ program ransX_avg
            uz(i)   = velz(i,j,k)
            ei(i)   = eint(i,j,k)
            pp(i)   = press(i,j,k)		
-           tt(i)   = temp(i,j,k)		   
+           tt(i)   = temp(i,j,k)
+           hh(i)   = enth(i,j,k)	   
 		enddo
     
         do i=1,qx
@@ -263,7 +307,7 @@ program ransX_avg
 		iux = ifield
         if(imode.eq.0) ransname(ifield) = 'ux'
         do i=1,qx
-           havg(2,ifield,i) = havg(2,ifield,i) + ux(i)*fsteradjk ! eh_dd
+           havg(2,ifield,i) = havg(2,ifield,i) + ux(i)*fsteradjk ! eh_ux
         enddo
 		
         ! uy (3)
@@ -271,7 +315,7 @@ program ransX_avg
 		iuy = ifield
         if(imode.eq.0) ransname(ifield) = 'uy'
         do i=1,qx
-           havg(2,ifield,i) = havg(2,ifield,i) + uy(i)*fsteradjk ! eh_dd
+           havg(2,ifield,i) = havg(2,ifield,i) + uy(i)*fsteradjk ! eh_uy
         enddo
 		
         ! uz (4)
@@ -279,7 +323,7 @@ program ransX_avg
 		iuz = ifield
         if(imode.eq.0) ransname(ifield) = 'uz'
         do i=1,qx
-           havg(2,ifield,i) = havg(2,ifield,i) + uz(i)*fsteradjk ! eh_dd				
+           havg(2,ifield,i) = havg(2,ifield,i) + uz(i)*fsteradjk ! eh_uz				
         enddo
 
         ! ei (5)
@@ -297,6 +341,22 @@ program ransX_avg
         if(imode.eq.0) ransname(ifield) = 'pp'
         do i=1,qx
            havg(2,ifield,i) = havg(2,ifield,i) + pp(i)*fsteradjk ! eh_pp
+        enddo		
+		
+        ! hh (7)
+        ifield = ifield + 1
+		ihh = ifield
+        if(imode.eq.0) ransname(ifield) = 'hh'
+        do i=1,qx
+           havg(2,ifield,i) = havg(2,ifield,i) + hh(i)*fsteradjk ! eh_hh
+        enddo		
+		
+        ! tt (8)
+        ifield = ifield + 1
+		itt = ifield
+        if(imode.eq.0) ransname(ifield) = 'tt'
+        do i=1,qx
+           havg(2,ifield,i) = havg(2,ifield,i) + tt(i)*fsteradjk ! eh_tt
         enddo		
 	
         do n=1,rans_nnuc   
@@ -349,11 +409,16 @@ program ransX_avg
      uxf_r(i,:,:) =  velx(i,:,:) - havg(2,iux,i) 		  
      uyf_r(i,:,:) =  vely(i,:,:) - havg(2,iuy,i) 
      uzf_r(i,:,:) =  velz(i,:,:) - havg(2,iuz,i)
-     ppf_r(i,:,:) =  press(i,:,:) - havg(2,ipp,i) 	 
+     ppf_r(i,:,:) =  press(i,:,:) - havg(2,ipp,i) 	
+     hhf_r(i,:,:) =  enth(i,:,:) - havg(2,ihh,i)	 
 	 ! get Favre corrections	
-	 uxf_c(i) = (sum(density(i,:,:)*uxf_r(i,:,:)*fsterad(:,:)))/havg(2,iux,i)
+	 uxf_c(i) = (sum(density(i,:,:)*uxf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)
+	 hhf_c(i) = (sum(density(i,:,:)*hhf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
+	 ddf_c(i) = (sum(density(i,:,:)*ddf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
 	 ! get Favre fluctuations
 	 uxf_f(i,:,:) =  uxf_r(i,:,:) - uxf_c(i)
+	 hhf_f(i,:,:) =  hhf_r(i,:,:) - hhf_c(i)
+	 ddf_f(i,:,:) =  ddf_r(i,:,:) - ddf_c(i)	 
   enddo	
   
   ! get grad P'
@@ -381,21 +446,20 @@ program ransX_avg
 	 !  if(imode.eq.0) then ! construct varnames
           9902 format(i0.4)
           write(xidchar,9902) n
-          xvarname(8) = 'fh_x' // xidchar //'x'          
-          xvarname(9) = 'fh_x' // xidchar//'xx'  !
-          xvarname(10) = 'fh_fsx'//xidchar       ! 
-          xvarname(11) = 'fh_fsx'//xidchar//'x' ! 
-          xvarname(12) = 'fh_sxn'//xidchar//'dot'
-          xvarname(13) = 'fh_fxn'//xidchar//'dotx'
-	      xvarname(14) = 'eh_x' // xidchar //'f_f'  
-		  xvarname(15) = 'eh_x' // xidchar //'fgradpf'
-		  xvarname(16) = 'fh_rxx' // xidchar		  
+          xvarname(8)  = 'fx' // xidchar //'x'          
+          xvarname(9)  = 'fx' // xidchar//'xx'  !
+          xvarname(10) = 'sx'//xidchar       ! 
+          xvarname(11) = 'fsx'//xidchar//'x' ! 
+          xvarname(12) = 'rfx'//xidchar//'dot'
+          xvarname(13) = 'fx'//xidchar//'dotx'
+	      xvarname(14) = 'rx' // xidchar //'f_f'  
+		  xvarname(15) = 'rx' // xidchar //'fgradpf'	  
      !  endif
 
         ! get Reynolds composition fluctuations	 
 		xnf_r(i,:,:) =  xnuc(i,:,:,n) - havg(2,iransname(n),i)
 		! get Favre corrections
-		xnf_c(i,n)   = (sum(density(i,:,:)*xnf_r(i,:,:)*fsterad(:,:)))/havg(2,iransname(n),i) 
+		xnf_c(i,n)   = (sum(density(i,:,:)*xnf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i) 
         ! get Favre composition fluctuations		
 		xnf_f(i,:,:) = xnf_r(i,:,:) - xnf_c(i,n)	 
 		! get nuclear composition rate of change
@@ -404,62 +468,108 @@ program ransX_avg
 
 	    ! get composition flux
         ifield = ifield+1	
-        ! fh_fxnx (57, 81, etc.) 		
+        ! fxnx (57, 81, etc.) 		
 		ransname(ifield) = xvarname(8)	
-		fh_fxnx(2,i,n)  = sum(xnf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
+		fxnx(2,i,n)  = sum(xnf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
 
 		! get flux of composition flux
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(9)
-		fh_fxnxx(2,i,n) = sum(xnf_f(i,:,:)*uxf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))	
+		fxnxx(2,i,n) = sum(xnf_f(i,:,:)*uxf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))	
 
         ! get composition variance
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(10)
-        fh_sxn(2,i,n) = sum(xnf_f(i,:,:)*xnf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
+        sxn(2,i,n) = sum(xnf_f(i,:,:)*xnf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
 
 		! get flux of variance
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(11)
-		fh_fsxnx(2,i,n) = sum(xnf_f(i,:,:)*xnf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
+		fsxnx(2,i,n) = sum(xnf_f(i,:,:)*xnf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
 
 		! get nuclear-variance coupling
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(12)
-		fh_sxndot(2,i,n) = sum(xnf_f(i,:,:)*xd(i,:,:)*density(i,:,:)*fsterad(:,:))
+		rfxndot(2,i,n) = sum(xnf_f(i,:,:)*xd(i,:,:)*density(i,:,:)*fsterad(:,:))
 
         ! get nuclear flux 
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(13)
-        fh_fxndotx(2,i,n) = sum(uxf_f(i,:,:)*xd(i,:,:)*density(i,:,:)*fsterad(:,:))
+        fxndotx(2,i,n) = sum(uxf_f(i,:,:)*xd(i,:,:)*density(i,:,:)*fsterad(:,:))
 
         ! get Reynolds average of X''
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(14)		
-        eh_xnf_f(2,i,n) = sum(xnf_f(i,:,:)*fsterad(:,:)) 	
+        rxnf_f(2,i,n) = sum(xnf_f(i,:,:)*fsterad(:,:)) 	
 		
         ! get pressure-force coupling
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(15)			
-        eh_xnfgradpf(2,i,n) = sum(xnf_f(i,:,:)*gradxppf_r(i,:,:)*fsterad(:,:)) 		
+        rxnfgradpf(2,i,n) = sum(xnf_f(i,:,:)*gradxppf_r(i,:,:)*fsterad(:,:)) 		
 	 enddo
-     ! get Reynolds stress (rr)
+     ! get Reynolds stress (rxx)
 	 ifield = ifield+1		
-	 ransname(ifield) = xvarname(16)		  
-     fh_rxx(2,i) = sum(uxf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))		
-  enddo    
+     ransname(ifield) = 'rxx'	  
+     rxx(2,i) = sum(uxf_f(i,:,:)*uxf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
+
+     ! get enthalpy flux (fhhx)
+	 ifield = ifield + 1
+     ransname(ifield) = 'fhhx'
+     fhhx(2,i) = sum(uxf_f(i,:,:)*hhf_f(i,:,:)*density(i,:,:)*fsterad(:,:)) 	 
+
+     ! heat capacity at constant pressure 
+	 ifield = ifield + 1
+     ransname(ifield) = 'ddcp'
+     ddcp(2,i) = sum(cpdat(i,:,:)*density(i,:,:)*fsterad(:,:))  
+ 
+     ! get Trms
+	 ifield = ifield + 1
+     ransname(ifield) = 'ttrms'
+     ttrms(2,i) = (sum(((temp(i,:,:)-havg(2,itt,i))**2)*fsterad(:,:)))**0.5
+
+     ! get Drms
+	 ifield = ifield + 1
+     ransname(ifield) = 'ddrms'
+     ddrms(2,i) = (sum(((density(i,:,:)-havg(2,idd,i))**2)*fsterad(:,:)))**0.5	 
+
+     ! get Favrian density variance (sddx)
+	 ifield = ifield + 1
+     ransname(ifield) = 'sddx'
+     sddx(2,i) = sum(ddf_f(i,:,:)*ddf_f(i,:,:)*density(i,:,:)*fsterad(:,:)) 	 
+	
+    ! get density fluctuation velocity coupling
+    ! divelx has to be added and constructed from divux !!	
+	 ifield = ifield + 1
+     ransname(ifield) = 'rdfdddivux'	
+	 rdfdddivux(2,i) = sum(uxf_f(i,:,:)*ddf_f(i,:,:)*density(i,:,:)*density(i,:,:)*divelx(i,:,:)*fsterad(:,:)) 	 
+
+    ! get density flux 
+	 ifield = ifield + 1
+     ransname(ifield) = 'fddx'	
+	 fddx(2,i) = sum(uxf_f(i,:,:)*ddf_f(i,:,:)*density(i,:,:)*fsterad(:,:))
+
+    ! get variance density flux 
+	 ifield = ifield + 1
+     ransname(ifield) = 'fsddx'	
+	 fsddx(2,i) = sum(uxf_f(i,:,:)*uxf_f(i,:,:)*ddf_f(i,:,:)*density(i,:,:)*fsterad(:,:))	 
+	 
+	enddo    
  
   write(*,*) ifield
  
-!  write(*,*) xnf_f(5,:,:)  
-  
+!  write(*,*) xnf_c 
+
+!   write(*,*) havg(2,idd,:)  
+ 
 !  write(*,*) xnf_r(:,:,1)
 !  write(*,*) eh_xnf_f(:,:)
   
 !  write(*,*) uxf_f(:,:,1) 
 !  write(*,*) ddf_r(:,:,:)	
 !  write(*,*) fh_fxnx(2,:,:)
-  write(*,*) fh_sxn(2,1,:) 
+!  write(*,*) fh_sxn(2,1,:) 
+   write(*,*) ttrms(2,:)
+   write(*,*) ransname(1)
  
  
   ! update RANS running average: fh_fxxx(3,:)
@@ -473,39 +583,61 @@ program ransX_avg
      rans_tavg = rans_tavg + dt
      rans_tend = time
      do i=1,qx 
-         fh_rxx(3,i) = fh_rxx(3,i) + &
-             (fh_rxx(2,i) + fh_rxx(1,n))*0.5d0*dt
+         rxx(3,i) = rxx(3,i) + &
+             (rxx(2,i) + rxx(1,n))*0.5d0*dt
+         fhhx(3,i) = fhhx(3,i) + &
+             (fhhx(2,i) + fhhx(1,n))*0.5d0*dt			 
+         ddcp(3,i) = ddcp(3,i) + &
+             (ddcp(2,i) + ddcp(1,n))*0.5d0*dt				 
+         ttrms(3,i) = ttrms(3,i) + &
+             (ttrms(2,i) + ttrms(1,n))*0.5d0*dt	
+         ddrms(3,i) = ddrms(3,i) + &
+             (ddrms(2,i) + ddrms(1,n))*0.5d0*dt
+         sddx(3,i) = sddx(3,i) + &
+             (sddx(2,i) + sddx(1,n))*0.5d0*dt				 
+         fddx(3,i) = fddx(3,i) + &
+             (fddx(2,i) + fddx(1,n))*0.5d0*dt
+         fsddx(3,i) = fsddx(3,i) + &
+             (fsddx(2,i) + fsddx(1,n))*0.5d0*dt			 
 		do n=1,rans_nnuc
-          fh_fxnx(3,i,n) = fh_fxnx(3,i,n) + &
-             (fh_fxnx(2,i,n) + fh_fxnx(1,i,n))*0.5d0*dt
-		  fh_fxnxx(3,i,n) = fh_fxnxx(3,i,n) + &
-             (fh_fxnxx(2,i,n) + fh_fxnxx(1,i,n))*0.5d0*dt
-          fh_sxn(3,i,n) = fh_sxn(3,i,n) + &
-             (fh_sxn(2,i,n) + fh_sxn(1,i,n))*0.5d0*dt
-          fh_fsxnx(3,i,n) = fh_fsxnx(3,i,n) + &
-             (fh_fsxnx(2,i,n) + fh_fsxnx(1,i,n))*0.5d0*dt
-          fh_sxndot(3,i,n) = fh_sxndot(3,i,n) + &  
-             (fh_sxndot(2,i,n) + fh_sxndot(1,i,n))*0.5d0*dt
-          fh_fxndotx(3,i,n) = fh_fxndotx(3,i,n) + &
-             (fh_fxndotx(2,i,n) + fh_fxndotx(1,i,n))*0.5d0*dt  
-          eh_xnf_f(3,i,n) = eh_xnf_f(3,i,n) + &
-              (eh_xnf_f(2,i,n) + eh_xnf_f(1,i,n))*0.5d0*dt
-          eh_xnfgradpf(3,i,n) = eh_xnfgradpf(3,i,n) + & 		  
-              (eh_xnfgradpf(2,i,n) + eh_xnfgradpf(1,i,n))*0.5d0*dt
+          fxnx(3,i,n) = fxnx(3,i,n) + &
+             (fxnx(2,i,n) + fxnx(1,i,n))*0.5d0*dt
+		  fxnxx(3,i,n) = fxnxx(3,i,n) + &
+             (fxnxx(2,i,n) + fxnxx(1,i,n))*0.5d0*dt
+          sxn(3,i,n) = sxn(3,i,n) + &
+             (sxn(2,i,n) + sxn(1,i,n))*0.5d0*dt
+          fsxnx(3,i,n) = fsxnx(3,i,n) + &
+             (fsxnx(2,i,n) + fsxnx(1,i,n))*0.5d0*dt
+          rfxndot(3,i,n) = rfxndot(3,i,n) + &  
+             (rfxndot(2,i,n) + rfxndot(1,i,n))*0.5d0*dt
+          fxndotx(3,i,n) = fxndotx(3,i,n) + &
+             (fxndotx(2,i,n) + fxndotx(1,i,n))*0.5d0*dt  
+          rxnf_f(3,i,n) = rxnf_f(3,i,n) + &
+              (rxnf_f(2,i,n) + rxnf_f(1,i,n))*0.5d0*dt
+          rxnfgradpf(3,i,n) = rxnfgradpf(3,i,n) + & 		  
+              (rxnfgradpf(2,i,n) + rxnfgradpf(1,i,n))*0.5d0*dt
         enddo		
      enddo	 
   else if(imode.eq.0) then
      do i=1,qx
-        fh_feix(4,i) = fh_feix(2,i) !store first instance in this averaging interval
+        rxx(4,i)  = rxx(2,i) !store first instance in this averaging interval
+        fhhx(4,i) = fhhx(2,i)
+        ddcp(4,i)   = ddcp(2,i)
+        ttrms(4,i)   = ttrms(2,i)
+        ddrms(4,i)   = ddrms(2,i)
+        sddx(4,i) = sddx(2,i)		
+		fddx(4,i) = fddx(2,i)
+		fsddx(4,i) = fsddx(2,i)		
+        rdfdddivux(4,i) = rdfdddivux(2,i) 		
 		do n=1,rans_nnuc
-		  fh_fxnx(4,i,n) = fh_fxnx(2,i,n)
-		  fh_fxnxx(4,i,n) = fh_fxnxx(2,i,n)
-		  fh_sxn(4,i,n) = fh_sxn(2,i,n)
-		  fh_fsxnx(4,i,n) = fh_fsxnx(2,i,n)
-		  fh_sxndot(4,i,n) = fh_sxndot(2,i,n)
-		  fh_fxndotx(4,i,n) = fh_fxndotx(2,i,n)
-		  eh_xnf_f(4,i,n) = eh_xnf_f(2,i,n)
-		  eh_xnfgradpf(4,i,n) = eh_xnfgradpf(2,i,n)
+		  fxnx(4,i,n) = fxnx(2,i,n)
+		  fxnxx(4,i,n) = fxnxx(2,i,n)
+		  sxn(4,i,n) = sxn(2,i,n)
+		  fsxnx(4,i,n) = fsxnx(2,i,n)
+		  rfxndot(4,i,n) = rfxndot(2,i,n)
+		  fxndotx(4,i,n) = fxndotx(2,i,n)
+		  rxnf_f(4,i,n) = rxnf_f(2,i,n)
+		  rxnfgradpf(4,i,n) = rxnfgradpf(2,i,n)
 		enddo
      enddo
   endif 
