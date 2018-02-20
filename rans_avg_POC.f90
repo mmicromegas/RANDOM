@@ -9,8 +9,8 @@ program ransX_avg
   
   ! the 2* is due to xdotn, the 8 is due to terms in comp equations (transport, flux, variance)
   ! the +1 is due to rxx, the +1 is due to fhhx, the +1 je ddcp,+1 je ttrms, +1 ddrms, +1 sddx, +1 rdfdddivux, +1 fddx, +1 fsddx
-  INTEGER, PARAMETER :: nrans = 8+2*nnuc+8*nnuc+1+1+1+1+1+1+1+1+1
-  INTEGER, PARAMETER :: ix = 15
+  INTEGER, PARAMETER :: nrans = 9+2*nnuc+9*nnuc+1+1+1+1+1+1+1+1+1
+  INTEGER, PARAMETER :: ix = 16
   
   integer*4 i, j, k, n, ii, jj, kk
   integer*4 ifield, rans_nnuc
@@ -18,8 +18,9 @@ program ransX_avg
   real*8 velx(qx,qy,qz), vely(qx,qy,qz),velz(qx,qy,qz)
   real*8 density(qx,qy,qz),eint(qx,qy,qz),temp(qx,qy,qz),cpdat(qx,qy,qz)
   real*8 energy(qx,qy,qz),ekin(qx,qy,qz),press(qx,qy,qz),enth(qx,qy,qz) 
+  real*8 divel(qx,qy,qz)
 
-  real*8 ei(qx),dd(qx),ux(qx),uy(qx),uz(qx),xn(qx,nnuc),tt(qx),pp(qx),hh(qx)
+  real*8 ei(qx),dd(qx),ux(qx),uy(qx),uz(qx),xn(qx,nnuc),tt(qx),pp(qx),hh(qx),divu(qx)
 
   real*8 fsterad(qy,qz)
   
@@ -57,6 +58,9 @@ program ransX_avg
 !  real*8 eh_xnf_f(qx,nnuc)  
   
   ! ransX
+  
+  real*8 geomxM(qx,qy,qz),geomyM(qx,qy,qz),geomzM(qx,qy,qz)
+  real*8 gxm(qx),gym(qx),qzm(qx)
 
   character(len=24) ransname(nrans)
   character(len=24) xvarname(ix)
@@ -79,7 +83,7 @@ program ransX_avg
   
   real*8 uxf_c(qx),eh_uyf_f(qx),eh_uzf_f(qx),eh_eif_f(qx)
   real*8 hhf_c(qx),ttf_c(qx),ddf_c(qx)  
-  real*8 xnf_c(qx,nnuc)
+  real*8 xnf_c(qx,nnuc), uyf_c(qx),uzf_c(qx)
   
   ! Favre fluctuations 
   
@@ -113,11 +117,14 @@ program ransX_avg
   real*8 xdotn(qx,nnuc), xd(qx,qy,qz)
   real*8 fxndotx(4,qx,nnuc)
   
+  ! geometry terms
+  real*8 galpha(4,qx,nnuc)
+  
   ! Density flux equation
   
   real*8 sddx(4,qx),rdfdddivux(4,qx),fddx(4,qx),fsddx(4,qx)
   real*8 divelx(qx,qy,qz)  
-  
+ 
   ! Other usefull fields
   
   real*8 rxx(4,qx), fhhx(4,qx),ddcp(4,qx),ttrms(4,qx),ddrms(4,qx)  
@@ -205,7 +212,11 @@ program ransX_avg
 		  temp(i,j,k) = i*7.
 		  press(i,j,k) = i*8.
           cpdat(i,j,k) = RAND(0)
-          divelx(i,j,k) = RAND(0)		  
+          divelx(i,j,k) = RAND(0)
+          divel(i,j,k) = RAND(0)
+          geomxM(i,j,k) = RAND(0)
+          geomyM(i,j,k) = RAND(0)
+          geomzM(i,j,k) = RAND(0)		  
 		enddo
 	 enddo
   enddo
@@ -283,7 +294,7 @@ program ransX_avg
            ei(i)   = eint(i,j,k)
            pp(i)   = press(i,j,k)		
            tt(i)   = temp(i,j,k)
-           hh(i)   = enth(i,j,k)	   
+           hh(i)   = enth(i,j,k)	
 		enddo
     
         do i=1,qx
@@ -359,6 +370,25 @@ program ransX_avg
            havg(2,ifield,i) = havg(2,ifield,i) + tt(i)*fsteradjk ! eh_tt
         enddo		
 	
+        ! dddivu (9)
+        ifield = ifield+1
+        if(imode.eq.0) ransname(ifield) = 'dddivu'
+        do i=1,qx
+           havg(2,ifield,i) =  havg(2,ifield,i) + &
+                dd(i)*divu(i)*fsteradjk
+        enddo
+	
+	
+       ! innermass ??
+        ! ddgg ( ?? )
+!        ifield = ifield + 1
+!        if(imode.eq.0) ransname(ifield) = 'ddgg'
+!        do i=1,qx
+!            havg(2,ifield,i) = havg(2,ifield,i)  &
+!                -dd(i)*bigG*innermass(i)/xznl(i)**2.d0*fsteradjk
+!        enddo
+!        endif	
+	
         do n=1,rans_nnuc   
 !           if(imode.eq.0) then ! construct varnames
               9901 format(i0.4)
@@ -413,10 +443,14 @@ program ransX_avg
      hhf_r(i,:,:) =  enth(i,:,:) - havg(2,ihh,i)	 
 	 ! get Favre corrections	
 	 uxf_c(i) = (sum(density(i,:,:)*uxf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)
+	 uyf_c(i) = (sum(density(i,:,:)*uyf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)
+	 uzf_c(i) = (sum(density(i,:,:)*uzf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
 	 hhf_c(i) = (sum(density(i,:,:)*hhf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
 	 ddf_c(i) = (sum(density(i,:,:)*ddf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
 	 ! get Favre fluctuations
 	 uxf_f(i,:,:) =  uxf_r(i,:,:) - uxf_c(i)
+	 uyf_f(i,:,:) =  uyf_r(i,:,:) - uyf_c(i)
+	 uzf_f(i,:,:) =  uzf_r(i,:,:) - uzf_c(i)	 
 	 hhf_f(i,:,:) =  hhf_r(i,:,:) - hhf_c(i)
 	 ddf_f(i,:,:) =  ddf_r(i,:,:) - ddf_c(i)	 
   enddo	
@@ -453,7 +487,8 @@ program ransX_avg
           xvarname(12) = 'rfx'//xidchar//'dot'
           xvarname(13) = 'fx'//xidchar//'dotx'
 	      xvarname(14) = 'rx' // xidchar //'f_f'  
-		  xvarname(15) = 'rx' // xidchar //'fgradpf'	  
+		  xvarname(15) = 'rx' // xidchar //'fgradpf'	
+		  xvarname(15) = 'galpha' // xidchar 		  
      !  endif
 
         ! get Reynolds composition fluctuations	 
@@ -505,7 +540,16 @@ program ransX_avg
         ! get pressure-force coupling
 		ifield = ifield+1		
 		ransname(ifield) = xvarname(15)			
-        rxnfgradpf(2,i,n) = sum(xnf_f(i,:,:)*gradxppf_r(i,:,:)*fsterad(:,:)) 		
+        rxnfgradpf(2,i,n) = sum(xnf_f(i,:,:)*gradxppf_r(i,:,:)*fsterad(:,:)) 	
+
+	   ! get geometry terms for the flux equation
+		ifield = ifield+1		
+		ransname(ifield) = xvarname(16)			
+        galpha(2,i,n) = sum((density(i,:,:)*xnf_f(i,:,:)*uyf_f(i,:,:)*uyf_f(i,:,:) + &
+		                     density(i,:,:)*xnf_f(i,:,:)*uzf_f(i,:,:)*uzf_f(i,:,:) + &
+							 density(i,:,:)*xnf_f(i,:,:)*vely(i,:,:)*vely(i,:,:) + &
+							 density(i,:,:)*xnf_f(i,:,:)*velz(i,:,:)*velz(i,:,:))*fsterad(:,:)) 	
+	  
 	 enddo
      ! get Reynolds stress (rxx)
 	 ifield = ifield+1		
@@ -552,7 +596,7 @@ program ransX_avg
 	 ifield = ifield + 1
      ransname(ifield) = 'fsddx'	
 	 fsddx(2,i) = sum(uxf_f(i,:,:)*uxf_f(i,:,:)*ddf_f(i,:,:)*density(i,:,:)*fsterad(:,:))	 
-	 
+	 	 
 	enddo    
  
   write(*,*) ifield
@@ -569,7 +613,7 @@ program ransX_avg
 !  write(*,*) fh_fxnx(2,:,:)
 !  write(*,*) fh_sxn(2,1,:) 
    write(*,*) ttrms(2,:)
-   write(*,*) ransname(1)
+!   write(*,*) ransname(1)
  
  
   ! update RANS running average: fh_fxxx(3,:)
