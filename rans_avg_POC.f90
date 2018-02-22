@@ -96,7 +96,7 @@ program ransX_avg
   real*8 pf(qx)  
   
   ! Fluxes
-  real*8 fh_feix(4,qx), fxnx(4,qx,nnuc), fxnxx(4,qx,nnuc), fh_xndotx(4,qx,nnuc)
+  real*8 fh_feix(4,qx), fxnx(4,qx,nnuc), fxnxx(4,qx,nnuc)
 
   ! Variances  
   
@@ -140,57 +140,82 @@ program ransX_avg
      
   rans_nnuc = nnuc	 
 	 
-  ! initialize fields for new segment of time averaging (between data dumps)
+  ! ransX initialize fields for new segment of time averaging (between data dumps)
   
   if(imode.eq.0) then
      rans_tstart = time
      rans_tavg   = 0.d0
-     do n=1,nrans
-        do i=1,qx
+     do n=1,qx
+        rxx(1,i)   = 0.d0
+        rxx(2,i)   = 0.d0
+        rxx(3,i)   = 0.d0		
+		fhhx(1,i)  = 0.d0  
+		fhhx(2,i)  = 0.d0
+		fhhx(3,i)  = 0.d0	
+		ddcp(1,i)  = 0.d0 
+		ddcp(2,i)  = 0.d0 
+		ddcp(3,i)  = 0.d0 	
+        ttrms(1,i) = 0.d0 		
+        ttrms(2,i) = 0.d0 
+        ttrms(3,i) = 0.d0
+        ddrms(1,i) = 0.d0 		
+        ddrms(2,i) = 0.d0 
+        ddrms(3,i) = 0.d0
+		sddx(1,i)  = 0.d0
+ 		sddx(2,i)  = 0.d0
+		sddx(3,i)  = 0.d0
+		fddx(1,i)  = 0.d0
+ 		fddx(2,i)  = 0.d0
+		fddx(3,i)  = 0.d0		
+		rdfdddivux(1,i) = 0.d0
+		rdfdddivux(2,i) = 0.d0
+		rdfdddivux(3,i) = 0.d0
+		fsddx(1,i) = 0.d0
+		fsddx(2,i) = 0.d0
+		fsddx(3,i) = 0.d0
+        do i=1,nrans
            havg(1,n,i) = 0.d0
            havg(2,n,i) = 0.d0
-           havg(3,n,i) = 0.d0
+           havg(3,n,i) = 0.d0		   
         enddo
      enddo
   else if(imode.eq.1) then
         do i=1,qx
-		   fh_feix(1,i) = fh_feix(2,i)
-           fh_feix(2,i) = 0.d0
-		   rxx(1,i) = rxx(2,i)
-		   rxx(2,i) = 0.d0
-		   fhhx(1,i) = fhhx(2,i)
-		   fhhx(2,i) = 0.d0
-		   ddcp(1,i) = ddcp(2,i)
-		   ddcp(2,i) = 0.d0
+		   rxx(1,i)   = rxx(2,i)
+		   rxx(2,i)   = 0.d0
+		   fhhx(1,i)  = fhhx(2,i)
+		   fhhx(2,i)  = 0.d0
+		   ddcp(1,i)  = ddcp(2,i)
+		   ddcp(2,i)  = 0.d0
 		   ttrms(1,i) = ttrms(2,i)
 		   ttrms(2,i) = 0.d0
 		   ddrms(1,i) = ddrms(2,i)
 		   ddrms(2,i) = 0.d0	
-		   sddx(1,i) = sddx(2,i)
-		   sddx(2,i) = 0.d0			   
-		   fddx(1,i) = fddx(2,i)
-		   fddx(2,i) = 0.d0	   
+		   sddx(1,i)  = sddx(2,i)
+		   sddx(2,i)  = 0.d0			   
+		   fddx(1,i)  = fddx(2,i)
+		   fddx(2,i)  = 0.d0	   
 		   rdfdddivux(1,i) = rdfdddivux(2,i)
 		   rdfdddivux(2,i) = 0.d0		
 		   fsddx(1,i) = fsddx(2,i)
 		   fsddx(2,i) = 0.d0			   
            do n=1,rans_nnuc		
-              fxnx(1,i,n) = fxnx(2,i,n)
-			  fxnx(2,i,n)= 0.
-              fxnxx(1,i,n) = fxnxx(2,i,n)
-			  fxnxx(2,i,n)= 0.			  
-			  sxn(1,i,n) = sxn(2,i,n)
-			  sxn(2,i,n)= 0.
-			  fsxnx(1,i,n) = fsxnx(2,i,n)
-			  fsxnx(2,i,n)= 0.
+              fxnx(1,i,n)    = fxnx(2,i,n)
+			  fxnx(2,i,n)    = 0.
+              fxnxx(1,i,n)   = fxnxx(2,i,n)
+			  fxnxx(2,i,n)   = 0.			  
+			  sxn(1,i,n)     = sxn(2,i,n)
+			  sxn(2,i,n)     = 0.
+			  fsxnx(1,i,n)   = fsxnx(2,i,n)
+			  fsxnx(2,i,n)   = 0.
 			  rfxndot(1,i,n) = rfxndot(2,i,n)
-			  rfxndot(2,i,n)= 0.
+			  rfxndot(2,i,n) = 0.
 			  fxndotx(1,i,n) = fxndotx(2,i,n)
-			  fxndotx(2,i,n)= 0.
-			  rxnf_f(1,i,n) = rxnf_f(2,i,n)
-		      rxnf_f(2,i,n)= 0.
+			  fxndotx(2,i,n) = 0.
+			  rxnf_f(1,i,n)  = rxnf_f(2,i,n)
+		      rxnf_f(2,i,n)  = 0.
               rxnfgradpf(1,i,n) = rxnfgradpf(2,i,n)
-              rxnfgradpf(2,i,n)= 0.	  
+              rxnfgradpf(2,i,n) = 0.	  
           enddo
 		enddo
   endif   
@@ -300,6 +325,7 @@ program ransX_avg
         do i=1,qx
            do n=1,rans_nnuc
               xn(i,n) = xnuc(i,j,k,n)
+			  xdotn(i,n) = xdot(i,j,k,n)			  
            enddo
         enddo
 	
@@ -434,28 +460,35 @@ program ransX_avg
    ! ransX
 
   do i=1,qx
+  
      ! get Reynolds fluctuations
-	 ddf_r(i,:,:) =  density(i,:,:) - havg(2,idd,i) 
-     uxf_r(i,:,:) =  velx(i,:,:) - havg(2,iux,i) 		  
-     uyf_r(i,:,:) =  vely(i,:,:) - havg(2,iuy,i) 
-     uzf_r(i,:,:) =  velz(i,:,:) - havg(2,iuz,i)
-     ppf_r(i,:,:) =  press(i,:,:) - havg(2,ipp,i) 	
-     hhf_r(i,:,:) =  enth(i,:,:) - havg(2,ihh,i)	 
+	 
+     ddf_r(i,:,:) =  density(i,:,:) - havg(2,idd,i) 
+     uxf_r(i,:,:) =  velx(i,:,:)    - havg(2,iux,i) 		  
+     uyf_r(i,:,:) =  vely(i,:,:)    - havg(2,iuy,i) 
+     uzf_r(i,:,:) =  velz(i,:,:)    - havg(2,iuz,i)
+     ppf_r(i,:,:) =  press(i,:,:)   - havg(2,ipp,i) 	
+     hhf_r(i,:,:) =  enth(i,:,:)    - havg(2,ihh,i)	 
+	 
 	 ! get Favre corrections	
+
 	 uxf_c(i) = (sum(density(i,:,:)*uxf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)
 	 uyf_c(i) = (sum(density(i,:,:)*uyf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)
 	 uzf_c(i) = (sum(density(i,:,:)*uzf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
 	 hhf_c(i) = (sum(density(i,:,:)*hhf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
 	 ddf_c(i) = (sum(density(i,:,:)*ddf_r(i,:,:)*fsterad(:,:)))/havg(2,idd,i)	 
+
 	 ! get Favre fluctuations
+
 	 uxf_f(i,:,:) =  uxf_r(i,:,:) - uxf_c(i)
 	 uyf_f(i,:,:) =  uyf_r(i,:,:) - uyf_c(i)
 	 uzf_f(i,:,:) =  uzf_r(i,:,:) - uzf_c(i)	 
 	 hhf_f(i,:,:) =  hhf_r(i,:,:) - hhf_c(i)
 	 ddf_f(i,:,:) =  ddf_r(i,:,:) - ddf_c(i)	 
+
   enddo	
   
-  ! get grad P'
+  ! get Grad P'
   
   dx = 1. 
   do k=1,qz
@@ -627,22 +660,14 @@ program ransX_avg
      rans_tavg = rans_tavg + dt
      rans_tend = time
      do i=1,qx 
-         rxx(3,i) = rxx(3,i) + &
-             (rxx(2,i) + rxx(1,n))*0.5d0*dt
-         fhhx(3,i) = fhhx(3,i) + &
-             (fhhx(2,i) + fhhx(1,n))*0.5d0*dt			 
-         ddcp(3,i) = ddcp(3,i) + &
-             (ddcp(2,i) + ddcp(1,n))*0.5d0*dt				 
-         ttrms(3,i) = ttrms(3,i) + &
-             (ttrms(2,i) + ttrms(1,n))*0.5d0*dt	
-         ddrms(3,i) = ddrms(3,i) + &
-             (ddrms(2,i) + ddrms(1,n))*0.5d0*dt
-         sddx(3,i) = sddx(3,i) + &
-             (sddx(2,i) + sddx(1,n))*0.5d0*dt				 
-         fddx(3,i) = fddx(3,i) + &
-             (fddx(2,i) + fddx(1,n))*0.5d0*dt
-         fsddx(3,i) = fsddx(3,i) + &
-             (fsddx(2,i) + fsddx(1,n))*0.5d0*dt			 
+         rxx(3,i)   = rxx(3,i)   + (rxx(2,i)   + rxx(1,n))*0.5d0*dt
+         fhhx(3,i)  = fhhx(3,i)  + (fhhx(2,i)  + fhhx(1,n))*0.5d0*dt			 
+         ddcp(3,i)  = ddcp(3,i)  + (ddcp(2,i)  + ddcp(1,n))*0.5d0*dt				 
+         ttrms(3,i) = ttrms(3,i) + (ttrms(2,i) + ttrms(1,n))*0.5d0*dt	
+         ddrms(3,i) = ddrms(3,i) + (ddrms(2,i) + ddrms(1,n))*0.5d0*dt
+         sddx(3,i)  = sddx(3,i)  + (sddx(2,i)  + sddx(1,n))*0.5d0*dt				 
+         fddx(3,i)  = fddx(3,i)  + (fddx(2,i)  + fddx(1,n))*0.5d0*dt
+         fsddx(3,i) = fsddx(3,i) + (fsddx(2,i) + fsddx(1,n))*0.5d0*dt			 
 		do n=1,rans_nnuc
           fxnx(3,i,n) = fxnx(3,i,n) + &
              (fxnx(2,i,n) + fxnx(1,i,n))*0.5d0*dt
@@ -664,19 +689,19 @@ program ransX_avg
      enddo	 
   else if(imode.eq.0) then
      do i=1,qx
-        rxx(4,i)  = rxx(2,i) !store first instance in this averaging interval
-        fhhx(4,i) = fhhx(2,i)
-        ddcp(4,i)   = ddcp(2,i)
-        ttrms(4,i)   = ttrms(2,i)
-        ddrms(4,i)   = ddrms(2,i)
-        sddx(4,i) = sddx(2,i)		
-		fddx(4,i) = fddx(2,i)
+        rxx(4,i)   = rxx(2,i) !store first instance in this averaging interval
+        fhhx(4,i)  = fhhx(2,i)
+        ddcp(4,i)  = ddcp(2,i)
+        ttrms(4,i) = ttrms(2,i)
+        ddrms(4,i) = ddrms(2,i)
+        sddx(4,i)  = sddx(2,i)		
+		fddx(4,i)  = fddx(2,i)
 		fsddx(4,i) = fsddx(2,i)		
         rdfdddivux(4,i) = rdfdddivux(2,i) 		
 		do n=1,rans_nnuc
-		  fxnx(4,i,n) = fxnx(2,i,n)
+		  fxnx(4,i,n)  = fxnx(2,i,n)
 		  fxnxx(4,i,n) = fxnxx(2,i,n)
-		  sxn(4,i,n) = sxn(2,i,n)
+		  sxn(4,i,n)   = sxn(2,i,n)
 		  fsxnx(4,i,n) = fsxnx(2,i,n)
 		  rfxndot(4,i,n) = rfxndot(2,i,n)
 		  fxndotx(4,i,n) = fxndotx(2,i,n)
